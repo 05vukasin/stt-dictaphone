@@ -25,12 +25,16 @@ export interface AnalyserSetup {
   disconnect(): void;
 }
 
-export function attachAnalyser(stream: MediaStream, fftSize = 512): AnalyserSetup {
+export function attachAnalyser(
+  stream: MediaStream,
+  fftSize = 512,
+  smoothingTimeConstant = 0.55,
+): AnalyserSetup {
   const audio = getAudioContext();
   const source = audio.createMediaStreamSource(stream);
   const analyser = audio.createAnalyser();
   analyser.fftSize = fftSize;
-  analyser.smoothingTimeConstant = 0.8;
+  analyser.smoothingTimeConstant = smoothingTimeConstant;
   source.connect(analyser);
   return {
     analyser,

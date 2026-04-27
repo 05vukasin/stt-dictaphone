@@ -37,10 +37,33 @@ export function clear(ctx: CanvasRenderingContext2D, width: number, height: numb
  * Draws all wave layers in one pass.
  * Path is sampled at 1px steps along the X axis.
  */
+/**
+ * How aggressively the loudest sample expands the wave's swing.
+ * 1 = unchanged baseline; higher = more dramatic when you talk loud.
+ */
+const REACTIVE_GAIN = 3.5;
+
+/**
+ * Floor for the reactive amplitude factor — keeps the wave alive even on
+ * silence (so it doesn't collapse to a flat line during quiet pauses).
+ */
+const REACTIVE_FLOOR = 0.55;
+
 export function drawWaves(opts: RenderOpts) {
   const { ctx, width, height, styles, reactive, reactiveBlend } = opts;
   const cy = height / 2;
   const blend = clamp01(reactiveBlend);
+
+  // Overall energy: average of the reactive bins. Used to scale the WHOLE
+  // wave's swing, so when you talk louder, every layer breathes bigger.
+  let energy = 0;
+  if (reactive && reactive.length > 0 && blend > 0) {
+    let sum = 0;
+    for (let i = 0; i < reactive.length; i++) sum += reactive[i];
+    energy = sum / reactive.length;
+  }
+  const energyFactor = REACTIVE_FLOOR + energy * (REACTIVE_GAIN - REACTIVE_FLOOR);
+
   for (const style of styles) {
     ctx.save();
     ctx.globalAlpha = style.alpha;
@@ -54,7 +77,10 @@ export function drawWaves(opts: RenderOpts) {
       let amp = sineY * style.amplitude;
       if (reactive && reactive.length > 0 && blend > 0) {
         const i = Math.floor(t * reactive.length);
-        const reactiveAmp = (reactive[i] - 0.5) * 2 * style.amplitude * 1.6;
+        // Per-bin perturbation — adds horizontal "shape" so different
+        // frequencies show up as bumps along the wave, not just overall size.
+        const localPerturb = (reactive[i] - 0.5) * style.amplitude * 0.7;
+        const reactiveAmp = sineY * style.amplitude * energyFactor + localPerturb;
         amp = lerp(amp, reactiveAmp, blend);
       }
       const y = cy + amp;

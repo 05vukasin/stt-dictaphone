@@ -17,8 +17,10 @@ interface WaveCanvasProps {
   isActive: boolean;
 }
 
-const REACTIVE_BINS = 96;
+const REACTIVE_BINS = 128;
 const FADE_MS = 600;
+// Per-frame catch-up: higher = snappier reaction to peaks (in 0..1).
+const REACTIVE_SMOOTHING = 0.65;
 
 export function WaveCanvas({ stream, isActive }: WaveCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -60,7 +62,9 @@ export function WaveCanvas({ stream, isActive }: WaveCanvasProps) {
       cleanupAnalyser?.();
       // Lazy import keeps module side-effects out of SSR.
       import("@/lib/audio-context").then(({ attachAnalyser }) => {
-        const setup = attachAnalyser(activeStream, 1024);
+        // 1024 FFT → 512 bins; smoothing 0.4 = very responsive (the wave
+        // is the part of the UI that should feel "alive", not the level meter).
+        const setup = attachAnalyser(activeStream, 1024, 0.4);
         analyser = setup.analyser;
         freqBuffer = new Uint8Array(analyser.frequencyBinCount);
         cleanupAnalyser = setup.disconnect;
@@ -91,7 +95,7 @@ export function WaveCanvas({ stream, isActive }: WaveCanvasProps) {
         // Cast to any to satisfy variant typings on older lib.dom — value semantics are identical.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         analyser.getByteFrequencyData(freqBuffer as any);
-        prevReactive = smoothReactive(freqBuffer, REACTIVE_BINS, prevReactive, 0.45);
+        prevReactive = smoothReactive(freqBuffer, REACTIVE_BINS, prevReactive, REACTIVE_SMOOTHING);
         reactive = prevReactive;
       }
 
