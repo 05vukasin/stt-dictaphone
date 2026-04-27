@@ -1,0 +1,185 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Duotone palette — dirty white + dark grey only.
+   --fg / --bg flip between light and dark; everything else is
+   derived as alpha layers of those two tones, keeping the UI
+   ruthlessly minimal.
+   ============================================================ */
+
+:root {
+  --bg: #f4f3ef;
+  --bg-elev: #eeece6;
+  --fg: #1c1c1c;
+  --fg-rgb: 28 28 28;
+  --bg-rgb: 244 243 239;
+
+  --surface: rgb(var(--fg-rgb) / 0.04);
+  --surface-strong: rgb(var(--fg-rgb) / 0.08);
+  --border: rgb(var(--fg-rgb) / 0.1);
+  --border-strong: rgb(var(--fg-rgb) / 0.2);
+  --muted: rgb(var(--fg-rgb) / 0.55);
+  --subtle: rgb(var(--fg-rgb) / 0.4);
+
+  --record: #c0584a;
+
+  --shadow-sm: 0 1px 2px rgb(var(--fg-rgb) / 0.05);
+  --shadow-md: 0 6px 20px rgb(var(--fg-rgb) / 0.08);
+  --shadow-lg: 0 18px 60px rgb(var(--fg-rgb) / 0.14);
+}
+
+.dark {
+  --bg: #161616;
+  --bg-elev: #1d1d1d;
+  --fg: #e8e6df;
+  --fg-rgb: 232 230 223;
+  --bg-rgb: 22 22 22;
+
+  --surface: rgb(var(--fg-rgb) / 0.05);
+  --surface-strong: rgb(var(--fg-rgb) / 0.1);
+  --border: rgb(var(--fg-rgb) / 0.1);
+  --border-strong: rgb(var(--fg-rgb) / 0.2);
+  --muted: rgb(var(--fg-rgb) / 0.55);
+  --subtle: rgb(var(--fg-rgb) / 0.4);
+
+  --record: #d76b5c;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 6px 20px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 18px 60px rgb(0 0 0 / 0.6);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elev: var(--bg-elev);
+  --color-fg: var(--fg);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-record: var(--record);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans",
+    sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  font-feature-settings:
+    "kern" 1,
+    "liga" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+}
+
+::selection {
+  background: rgb(var(--fg-rgb) / 0.15);
+  color: var(--fg);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus rings — single tone, matches palette */
+:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline-offset: 3px;
+}
+
+/* Idle-wave canvas baseline — keeps GPU layer */
+canvas.wave {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* ============================================================
+   Animations
+   ============================================================ */
+
+@keyframes pulse-record {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.85;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.anim-fade-in {
+  animation: fade-in 200ms ease-out both;
+}
+
+.anim-scale-in {
+  animation: scale-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.anim-slide-up {
+  animation: slide-up 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
