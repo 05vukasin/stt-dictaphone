@@ -33,15 +33,14 @@ export function HistoryList() {
         </span>
       </header>
 
-      <div className="mt-5 flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+      <div className="mt-5 flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 transition-colors focus-within:border-[var(--border-strong)]">
         <FiSearch aria-hidden className="size-4 text-[var(--muted)]" />
         <input
           type="search"
           placeholder="Search transcripts…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          autoFocus={transcripts.length > 0}
-          className="w-full bg-transparent text-[13px] outline-none placeholder:text-[var(--muted)]"
+          className="w-full appearance-none border-0 bg-transparent text-base outline-none ring-0 placeholder:text-[var(--muted)] sm:text-[13px]"
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.currentTarget.blur();

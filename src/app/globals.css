@@ -95,16 +95,40 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Focus rings — single tone, matches palette */
-:focus-visible {
+/* Focus rings — only on buttons / links. Inputs and textareas show focus
+   via their wrapper's focus-within state, which keeps the duotone palette
+   clean and avoids the heavy 2px outline on text fields. */
+button:focus-visible,
+a:focus-visible,
+[role="radio"]:focus-visible,
+[role="button"]:focus-visible {
   outline: 2px solid var(--fg);
-  outline-offset: 2px;
+  outline-offset: 3px;
   border-radius: 4px;
 }
 
-button:focus-visible,
-a:focus-visible {
-  outline-offset: 3px;
+/* Input + textarea: rely on their own border / wrapper focus-within. */
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible {
+  outline: none;
+}
+
+/* Strip WebKit's default search input chrome (rounded border, cancel "X",
+   results decoration). Our own wrapper handles the visual chrome. */
+input[type="search"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-results-button,
+input[type="search"]::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 /* Idle-wave canvas baseline — keeps GPU layer */

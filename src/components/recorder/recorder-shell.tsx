@@ -123,12 +123,12 @@ export function RecorderShell() {
         </div>
       </header>
 
-      <main className="relative flex flex-1 flex-col items-center justify-center px-5 pb-12 pt-6 sm:px-8">
-        <div className="pointer-events-none absolute inset-x-0 top-1/4 h-48 sm:h-60">
+      <main className="relative flex flex-1 flex-col items-center justify-end px-5 pb-16 pt-6 sm:px-8 sm:pb-24">
+        <div className="pointer-events-none absolute inset-x-0 top-[18%] h-44 sm:top-[20%] sm:h-56">
           <WaveCanvas stream={stream} isActive={isActive} />
         </div>
 
-        <div className="z-10 flex flex-col items-center gap-6 pt-32 sm:pt-40">
+        <div className="z-10 flex flex-col items-center gap-6 pb-2 sm:pb-6">
           <div className="flex items-center gap-3">
             <RecordingTimer ms={durationMs} active={isActive} />
             <LevelMeter peak={peak} active={isActive} />
