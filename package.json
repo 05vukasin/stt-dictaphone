@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "unset TURBOPACK; next dev --webpack",
+    "dev": "next dev",
     "build": "unset TURBOPACK; next build --webpack",
     "start": "next start",
     "lint": "eslint",

@@ -30,7 +30,7 @@ Keys are stored in `localStorage` on this device. The Next.js API routes proxy e
 
 | Script               | What it does                                                  |
 | -------------------- | ------------------------------------------------------------- |
-| `npm run dev`        | Dev server (webpack — required for service-worker generation) |
+| `npm run dev`        | Dev server (Turbopack; service worker is disabled in dev)     |
 | `npm run build`      | Production build                                              |
 | `npm start`          | Start the production build                                    |
 | `npm test`           | Run the Vitest suite once                                     |

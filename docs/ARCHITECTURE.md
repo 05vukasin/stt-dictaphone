@@ -114,8 +114,15 @@ src/
 
 ## Build pipeline
 
-- **Webpack** (not Turbopack): @serwist/next requires the webpack pipeline to inject the precache manifest into `src/app/sw.ts` and emit `public/sw.js`. The `dev` and `build` scripts pass `--webpack` explicitly.
-- **PWA**: `withSerwistInit({ swSrc, swDest, ... })` wraps the Next config. Disabled in dev so HMR isn't haunted by a cached worker.
+- **Build uses Webpack, dev uses Turbopack**:
+  - `npm run build` passes `--webpack` (and unsets `TURBOPACK=1`) so @serwist/next
+    can hook into the webpack pipeline, inject the precache manifest into
+    `src/app/sw.ts`, and emit `public/sw.js`.
+  - `npm run dev` stays on Turbopack — the SW is intentionally `disable`d in
+    dev anyway, and Turbopack handles Tailwind v4's `@import "tailwindcss"`
+    natively. Forcing webpack in dev breaks Tailwind's CSS pipeline.
+- **PWA**: `withSerwistInit({ swSrc, swDest, ... })` wraps the Next config.
+  Disabled in dev so HMR isn't haunted by a cached worker.
 
 ## Where to add new things
 

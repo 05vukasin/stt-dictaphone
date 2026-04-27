@@ -41,9 +41,14 @@ next-pwa).
 ### Build pipeline note
 
 `next build` defaults to **Turbopack** in Next 16. @serwist/next is webpack-
-based and can't hook into Turbopack today. Both `npm run dev` and
-`npm run build` pass `--webpack` to force the webpack pipeline. Without that
-flag, the SW does not get generated and the app silently degrades to non-PWA.
+based and can't hook into Turbopack today, so `npm run build` passes
+`--webpack` (and unsets the inherited `TURBOPACK=1`). Without that flag, the
+SW does not get generated and the app silently degrades to non-PWA.
+
+`npm run dev` stays on Turbopack — the service worker is intentionally
+`disable`d in development (`next.config.ts`) so HMR isn't haunted by a cached
+worker, and Turbopack is what handles Tailwind v4's `@import` cleanly during
+hot reload. Forcing webpack in dev breaks Tailwind's CSS pipeline.
 
 ## Registration
 
