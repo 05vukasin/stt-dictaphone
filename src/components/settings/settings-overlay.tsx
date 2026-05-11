@@ -2,6 +2,8 @@
 
 import { Modal } from "../ui/modal";
 import { ThemeSelector } from "./theme-selector";
+import { LanguageSection } from "./language-section";
+import { MicSection } from "./mic-section";
 import { ProviderSection } from "./provider-section";
 import { PromptSection } from "./prompt-section";
 import { DataSection } from "./data-section";
@@ -21,8 +23,10 @@ export function SettingsOverlay({ open, onClose }: SettingsOverlayProps) {
         <SettingsSection title="Appearance">
           <ThemeSelector />
         </SettingsSection>
-        <ProviderSection />
+        <LanguageSection />
         <PromptSection />
+        <MicSection />
+        <ProviderSection />
         <DataSection />
         <ShortcutsSection />
         <AboutSection />

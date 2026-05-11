@@ -3,6 +3,7 @@
 import { FiCopy, FiRefreshCcw, FiZap } from "react-icons/fi";
 import type { Transcript } from "@/types/recording";
 import { runSummary } from "@/lib/transcription-service";
+import { useUserId } from "@/lib/storage/user-scope";
 import { toast } from "@/lib/use-toast";
 
 interface SummaryViewProps {
@@ -10,6 +11,7 @@ interface SummaryViewProps {
 }
 
 export function SummaryView({ transcript }: SummaryViewProps) {
+  const userId = useUserId();
   const isWorking =
     transcript.summaryStatus === "summarizing" || transcript.summaryStatus === "queued";
   const canSummarize = transcript.text.trim().length > 0;
@@ -38,7 +40,7 @@ export function SummaryView({ transcript }: SummaryViewProps) {
           </button>
           <button
             type="button"
-            onClick={() => runSummary(transcript.id)}
+            onClick={() => runSummary(userId, transcript.id)}
             disabled={isWorking || !canSummarize}
             className={btnCx + " disabled:opacity-40"}
           >

@@ -1,11 +1,15 @@
 "use client";
 
-import type { SttProvider, SummaryProvider } from "@/types/settings";
+// The client no longer chooses the provider or carries an API key — those
+// live in the user's effective settings (admin-controlled, server-only). The
+// browser just hands the audio blob over and optionally suggests a language
+// or prompt override; the server is the source of truth.
 
 export interface TranscribeOpts {
   audio: Blob;
-  provider: SttProvider;
-  apiKey: string;
+  // Optional per-request overrides. The server will use these instead of the
+  // user's saved override if provided, but the saved override is sufficient
+  // for the normal flow.
   language?: string;
   prompt?: string;
 }
@@ -21,14 +25,7 @@ export async function callTranscribe(opts: TranscribeOpts): Promise<TranscribeRe
   form.append("audio", opts.audio, "recording.webm");
   if (opts.language) form.append("language", opts.language);
   if (opts.prompt) form.append("prompt", opts.prompt);
-  const res = await fetch("/api/transcribe", {
-    method: "POST",
-    headers: {
-      "x-stt-provider": opts.provider,
-      "x-api-key": opts.apiKey,
-    },
-    body: form,
-  });
+  const res = await fetch("/api/transcribe", { method: "POST", body: form });
   if (!res.ok) {
     const body = await safeText(res);
     throw new Error(extractError(body) || `Transcription failed (${res.status})`);
@@ -38,9 +35,7 @@ export async function callTranscribe(opts: TranscribeOpts): Promise<TranscribeRe
 
 export interface SummarizeOpts {
   text: string;
-  provider: SummaryProvider;
-  apiKey: string;
-  prompt: string;
+  prompt?: string;
   model?: string;
 }
 
@@ -52,11 +47,7 @@ export interface SummarizeResult {
 export async function callSummarize(opts: SummarizeOpts): Promise<SummarizeResult> {
   const res = await fetch("/api/summarize", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-summary-provider": opts.provider,
-      "x-api-key": opts.apiKey,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text: opts.text, prompt: opts.prompt, model: opts.model }),
   });
   if (!res.ok) {

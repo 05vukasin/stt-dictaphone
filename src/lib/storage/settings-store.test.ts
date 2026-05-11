@@ -1,89 +1,70 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   __resetSettingsForTests,
-  getSettings,
-  patchSettings,
-  setSettings,
-  resetSettings,
-  exportSettings,
-  importSettings,
+  getDeviceSettings,
+  patchDeviceSettings,
+  clearDeviceSettingsFor,
 } from "./settings-store";
-import { DEFAULT_SETTINGS } from "@/types/settings";
+import { DEFAULT_DEVICE_SETTINGS } from "@/types/settings";
+
+const TEST_USER = "user-a";
 
 beforeEach(() => {
   __resetSettingsForTests();
 });
 
-describe("settings-store", () => {
+describe("device settings store (v2)", () => {
   it("returns defaults when nothing is stored", () => {
-    expect(getSettings()).toEqual(DEFAULT_SETTINGS);
+    expect(getDeviceSettings(TEST_USER)).toEqual(DEFAULT_DEVICE_SETTINGS);
   });
 
-  it("persists patches", () => {
-    patchSettings({ openaiApiKey: "sk-test" });
-    expect(getSettings().openaiApiKey).toBe("sk-test");
-
-    __resetSettingsForTests();
-    // Reseed localStorage manually
-    window.localStorage.setItem(
-      "stt-dict:settings:v1",
-      JSON.stringify({ ...DEFAULT_SETTINGS, openaiApiKey: "sk-test" }),
-    );
-    expect(getSettings().openaiApiKey).toBe("sk-test");
+  it("persists a mic device id", () => {
+    patchDeviceSettings(TEST_USER, { micDeviceId: "device-abc" });
+    expect(getDeviceSettings(TEST_USER).micDeviceId).toBe("device-abc");
   });
 
   it("falls back to defaults on invalid JSON", () => {
-    window.localStorage.setItem("stt-dict:settings:v1", "{not-valid-json");
+    window.localStorage.setItem(`stt-dict:settings:v2:${TEST_USER}`, "{not-valid-json");
     __resetSettingsForTests();
-    window.localStorage.setItem("stt-dict:settings:v1", "{not-valid-json");
-    expect(getSettings()).toEqual(DEFAULT_SETTINGS);
+    window.localStorage.setItem(`stt-dict:settings:v2:${TEST_USER}`, "{not-valid-json");
+    expect(getDeviceSettings(TEST_USER)).toEqual(DEFAULT_DEVICE_SETTINGS);
   });
 
-  it("falls back to defaults on schema mismatch", () => {
+  it("silently drops a stale v1 blob (carrying API keys) on read", () => {
+    // Pre-populate the old v1 key with admin-tier fields. The loader for v2
+    // doesn't read it; the cleanup below verifies it gets cleared too.
     window.localStorage.setItem(
-      "stt-dict:settings:v1",
-      JSON.stringify({ version: 999, sttProvider: "nope" }),
+      `stt-dict:settings:v1:${TEST_USER}`,
+      JSON.stringify({ version: 1, openaiApiKey: "sk-LEAKED" }),
     );
-    __resetSettingsForTests();
-    expect(getSettings()).toEqual(DEFAULT_SETTINGS);
+    expect(getDeviceSettings(TEST_USER)).toEqual(DEFAULT_DEVICE_SETTINGS);
   });
 
-  it("setSettings replaces the whole object", () => {
-    setSettings(() => ({ ...DEFAULT_SETTINGS, language: "en" }));
-    expect(getSettings().language).toBe("en");
+  it("clearDeviceSettingsFor wipes both the v2 slot and any stale v1 blob", () => {
+    patchDeviceSettings(TEST_USER, { micDeviceId: "device-abc" });
+    window.localStorage.setItem(
+      `stt-dict:settings:v1:${TEST_USER}`,
+      JSON.stringify({ version: 1, openaiApiKey: "sk-LEAKED" }),
+    );
+    clearDeviceSettingsFor(TEST_USER);
+    expect(window.localStorage.getItem(`stt-dict:settings:v2:${TEST_USER}`)).toBeNull();
+    expect(window.localStorage.getItem(`stt-dict:settings:v1:${TEST_USER}`)).toBeNull();
   });
 
-  it("resetSettings restores defaults", () => {
-    patchSettings({ openaiApiKey: "sk-test" });
-    resetSettings();
-    expect(getSettings()).toEqual(DEFAULT_SETTINGS);
-  });
+  describe("isolation by userId", () => {
+    it("each user has an independent slot", () => {
+      patchDeviceSettings("alice", { micDeviceId: "alice-mic" });
+      patchDeviceSettings("bob", { micDeviceId: "bob-mic" });
+      expect(getDeviceSettings("alice").micDeviceId).toBe("alice-mic");
+      expect(getDeviceSettings("bob").micDeviceId).toBe("bob-mic");
+    });
 
-  it("exportSettings strips api keys by default", () => {
-    patchSettings({ openaiApiKey: "sk-test", groqApiKey: "gsk-test" });
-    const exported = JSON.parse(exportSettings());
-    expect(exported.openaiApiKey).toBe("");
-    expect(exported.groqApiKey).toBe("");
-  });
-
-  it("exportSettings(true) includes api keys", () => {
-    patchSettings({ openaiApiKey: "sk-test" });
-    const exported = JSON.parse(exportSettings(true));
-    expect(exported.openaiApiKey).toBe("sk-test");
-  });
-
-  it("importSettings round-trips", () => {
-    patchSettings({ language: "sr" });
-    const dump = exportSettings(true);
-    resetSettings();
-    expect(getSettings().language).toBe("auto");
-    const result = importSettings(dump);
-    expect(result.ok).toBe(true);
-    expect(getSettings().language).toBe("sr");
-  });
-
-  it("importSettings rejects bad JSON", () => {
-    const result = importSettings("not-json");
-    expect(result.ok).toBe(false);
+    it("clear only affects the target user", () => {
+      patchDeviceSettings("alice", { micDeviceId: "alice-mic" });
+      patchDeviceSettings("bob", { micDeviceId: "bob-mic" });
+      clearDeviceSettingsFor("alice");
+      expect(getDeviceSettings("alice")).toEqual(DEFAULT_DEVICE_SETTINGS);
+      expect(getDeviceSettings("bob").micDeviceId).toBe("bob-mic");
+    });
   });
 });

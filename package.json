@@ -1,9 +1,9 @@
 {
   "name": "stt-dictaphone",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "unset TURBOPACK; next build --webpack",
     "start": "next start",
     "lint": "eslint",
@@ -13,19 +13,30 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "typecheck": "tsc --noEmit",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "db:push": "drizzle-kit push",
+    "auth:generate": "better-auth generate --output src/lib/db/schema/auth.generated.ts",
+    "seed:admin": "tsx scripts/seed-admin.ts"
   },
   "dependencies": {
+    "better-auth": "^1.6.10",
+    "drizzle-orm": "^0.45.2",
     "idb": "^8.0.3",
     "next": "16.2.4",
     "next-themes": "^0.4.6",
+    "postgres": "^3.4.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-icons": "^5.6.0",
+    "server-only": "^0.0.1",
     "ulid": "^3.0.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@better-auth/cli": "^1.4.21",
     "@serwist/next": "^9.5.7",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",
@@ -35,6 +46,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/ui": "^4.1.5",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "fake-indexeddb": "^6.2.5",
@@ -43,6 +55,7 @@
     "serwist": "^9.5.7",
     "sharp": "^0.34.5",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.1.5"
   }

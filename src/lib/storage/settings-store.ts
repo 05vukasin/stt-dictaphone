@@ -1,72 +1,95 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { DEFAULT_SETTINGS, SettingsSchema, type Settings } from "@/types/settings";
+import {
+  DEFAULT_DEVICE_SETTINGS,
+  DeviceSettingsSchema,
+  type DeviceSettings,
+} from "@/types/settings";
+import { useUserId } from "./user-scope";
 
-const STORAGE_KEY = "stt-dict:settings:v1";
+// Device-local settings = a single field today (micDeviceId) plus a version
+// tag. Admin-controlled config lives in Postgres and is resolved by the
+// server via getEffectiveSettings (see src/lib/settings/effective.ts).
+//
+// The localStorage key is namespaced by user so a shared browser doesn't
+// leak one user's mic preference to the next. The old v1 blob (which
+// carried API keys) is silently dropped on read via the schema-mismatch
+// fallback — see settings-store.test.ts for the migration assertion.
 
-let cache: Settings = DEFAULT_SETTINGS;
-let initialized = false;
+const KEY_PREFIX = "stt-dict:settings:v2";
+
+function keyFor(userId: string): string {
+  return `${KEY_PREFIX}:${userId}`;
+}
+
+const caches = new Map<string, DeviceSettings>();
+const initialized = new Set<string>();
 const listeners = new Set<() => void>();
+let storageListenerAttached = false;
 
 function emit() {
   for (const cb of listeners) cb();
 }
 
-function load(): Settings {
-  if (typeof window === "undefined") return DEFAULT_SETTINGS;
+function load(userId: string): DeviceSettings {
+  if (typeof window === "undefined") return DEFAULT_DEVICE_SETTINGS;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_SETTINGS;
+    const raw = window.localStorage.getItem(keyFor(userId));
+    if (!raw) return DEFAULT_DEVICE_SETTINGS;
     const parsed = JSON.parse(raw);
-    return SettingsSchema.parse(parsed);
+    return DeviceSettingsSchema.parse(parsed);
   } catch {
-    return DEFAULT_SETTINGS;
+    return DEFAULT_DEVICE_SETTINGS;
   }
 }
 
-function save(settings: Settings) {
+function save(userId: string, settings: DeviceSettings) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    window.localStorage.setItem(keyFor(userId), JSON.stringify(settings));
   } catch {
-    // Quota exceeded or storage disabled — ignore silently.
+    // Quota exceeded — ignore silently.
   }
 }
 
-function ensureInit() {
-  if (initialized) return;
-  cache = load();
-  initialized = true;
-  if (typeof window !== "undefined") {
-    window.addEventListener("storage", (e) => {
-      if (e.key === STORAGE_KEY) {
-        cache = load();
-        emit();
-      }
-    });
-  }
+function attachStorageListener() {
+  if (storageListenerAttached || typeof window === "undefined") return;
+  storageListenerAttached = true;
+  window.addEventListener("storage", (e) => {
+    if (!e.key || !e.key.startsWith(KEY_PREFIX + ":")) return;
+    const userId = e.key.slice(KEY_PREFIX.length + 1);
+    caches.set(userId, load(userId));
+    emit();
+  });
 }
 
-export function getSettings(): Settings {
-  ensureInit();
-  return cache;
+function ensureInit(userId: string) {
+  if (initialized.has(userId)) return;
+  caches.set(userId, load(userId));
+  initialized.add(userId);
+  attachStorageListener();
 }
 
-export function setSettings(updater: (prev: Settings) => Settings) {
-  ensureInit();
-  const next = SettingsSchema.parse(updater(cache));
-  cache = next;
-  save(next);
+export function getDeviceSettings(userId: string): DeviceSettings {
+  ensureInit(userId);
+  return caches.get(userId) ?? DEFAULT_DEVICE_SETTINGS;
+}
+
+export function setDeviceSettings(
+  userId: string,
+  updater: (prev: DeviceSettings) => DeviceSettings,
+) {
+  ensureInit(userId);
+  const prev = caches.get(userId) ?? DEFAULT_DEVICE_SETTINGS;
+  const next = DeviceSettingsSchema.parse(updater(prev));
+  caches.set(userId, next);
+  save(userId, next);
   emit();
 }
 
-export function patchSettings(patch: Partial<Settings>) {
-  setSettings((prev) => ({ ...prev, ...patch }));
-}
-
-export function resetSettings() {
-  setSettings(() => DEFAULT_SETTINGS);
+export function patchDeviceSettings(userId: string, patch: Partial<DeviceSettings>) {
+  setDeviceSettings(userId, (prev) => ({ ...prev, ...patch }));
 }
 
 function subscribe(cb: () => void) {
@@ -76,34 +99,37 @@ function subscribe(cb: () => void) {
   };
 }
 
-function getServerSnapshot(): Settings {
-  return DEFAULT_SETTINGS;
+function getServerSnapshot(): DeviceSettings {
+  return DEFAULT_DEVICE_SETTINGS;
 }
 
-export function useSettings(): Settings {
-  return useSyncExternalStore(subscribe, getSettings, getServerSnapshot);
+export function useDeviceSettings(): DeviceSettings {
+  const userId = useUserId();
+  return useSyncExternalStore(subscribe, () => getDeviceSettings(userId), getServerSnapshot);
 }
 
-// Export settings as a JSON blob, omitting API keys for safety.
-export function exportSettings(includeKeys = false): string {
-  const s = getSettings();
-  const out = includeKeys ? s : { ...s, openaiApiKey: "", groqApiKey: "", anthropicApiKey: "" };
-  return JSON.stringify(out, null, 2);
-}
-
-export function importSettings(json: string): { ok: boolean; error?: string } {
-  try {
-    const parsed = SettingsSchema.parse(JSON.parse(json));
-    setSettings(() => parsed);
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Invalid JSON" };
+// Drops the cached snapshot and persisted slot for one user. Used by the
+// sign-out wipe helper and the explicit "Wipe all data" button.
+export function clearDeviceSettingsFor(userId: string) {
+  caches.delete(userId);
+  initialized.delete(userId);
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(keyFor(userId));
+    // Best-effort cleanup of the old v1 key (which may carry API keys).
+    window.localStorage.removeItem(`stt-dict:settings:v1:${userId}`);
   }
+  emit();
 }
 
-// Test-only: clear the in-memory cache so each test gets a fresh load.
 export function __resetSettingsForTests() {
-  cache = DEFAULT_SETTINGS;
-  initialized = false;
-  if (typeof window !== "undefined") window.localStorage.removeItem(STORAGE_KEY);
+  caches.clear();
+  initialized.clear();
+  if (typeof window !== "undefined") {
+    for (let i = window.localStorage.length - 1; i >= 0; i--) {
+      const k = window.localStorage.key(i);
+      if (k && (k.startsWith(KEY_PREFIX + ":") || k.startsWith("stt-dict:settings:v1:"))) {
+        window.localStorage.removeItem(k);
+      }
+    }
+  }
 }

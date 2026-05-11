@@ -8,15 +8,10 @@ import {
 } from "./recordings-store";
 import { __resetDbForTests } from "./idb";
 
+const TEST_USER = "user-a";
+
 beforeEach(async () => {
-  // Close any cached connection, then drop the whole DB so each test starts clean.
   await __resetDbForTests();
-  await new Promise<void>((resolve) => {
-    const req = indexedDB.deleteDatabase("stt-dictaphone");
-    req.onsuccess = () => resolve();
-    req.onerror = () => resolve();
-    req.onblocked = () => resolve();
-  });
 });
 
 function makeRec(id: string, createdAt: number) {
@@ -30,34 +25,54 @@ function makeRec(id: string, createdAt: number) {
 
 describe("recordings-store", () => {
   it("persists and retrieves a recording", async () => {
-    await putRecording(makeRec("a", 1000));
-    const got = await getRecording("a");
+    await putRecording(TEST_USER, makeRec("a", 1000));
+    const got = await getRecording(TEST_USER, "a");
     expect(got?.id).toBe("a");
-    // fake-indexeddb's structured clone may return a polyfilled blob — we only
-    // need to confirm something blob-like with bytes round-tripped.
     expect(got?.blob).toBeDefined();
     expect(got?.mime).toBe("audio/webm");
   });
 
   it("lists ids", async () => {
-    await putRecording(makeRec("a", 1));
-    await putRecording(makeRec("b", 2));
-    const ids = (await listRecordingIds()).sort();
+    await putRecording(TEST_USER, makeRec("a", 1));
+    await putRecording(TEST_USER, makeRec("b", 2));
+    const ids = (await listRecordingIds(TEST_USER)).sort();
     expect(ids).toEqual(["a", "b"]);
   });
 
   it("deletes a single recording", async () => {
-    await putRecording(makeRec("a", 1));
-    await putRecording(makeRec("b", 2));
-    await deleteRecording("a");
-    const ids = await listRecordingIds();
-    expect(ids).toEqual(["b"]);
+    await putRecording(TEST_USER, makeRec("a", 1));
+    await putRecording(TEST_USER, makeRec("b", 2));
+    await deleteRecording(TEST_USER, "a");
+    expect(await listRecordingIds(TEST_USER)).toEqual(["b"]);
   });
 
   it("clears all", async () => {
-    await putRecording(makeRec("a", 1));
-    await putRecording(makeRec("b", 2));
-    await clearAllRecordings();
-    expect(await listRecordingIds()).toEqual([]);
+    await putRecording(TEST_USER, makeRec("a", 1));
+    await putRecording(TEST_USER, makeRec("b", 2));
+    await clearAllRecordings(TEST_USER);
+    expect(await listRecordingIds(TEST_USER)).toEqual([]);
+  });
+
+  describe("isolation by userId", () => {
+    it("user A's recordings are invisible to user B", async () => {
+      await putRecording("alice", makeRec("a1", 1));
+      await putRecording("alice", makeRec("a2", 2));
+      await putRecording("bob", makeRec("b1", 1));
+
+      const aliceIds = (await listRecordingIds("alice")).sort();
+      const bobIds = (await listRecordingIds("bob")).sort();
+
+      expect(aliceIds).toEqual(["a1", "a2"]);
+      expect(bobIds).toEqual(["b1"]);
+      expect(await getRecording("bob", "a1")).toBeUndefined();
+    });
+
+    it("clearAllRecordings only wipes the target user", async () => {
+      await putRecording("alice", makeRec("a1", 1));
+      await putRecording("bob", makeRec("b1", 1));
+      await clearAllRecordings("alice");
+      expect(await listRecordingIds("alice")).toEqual([]);
+      expect(await listRecordingIds("bob")).toEqual(["b1"]);
+    });
   });
 });

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { FiArrowLeft, FiCheck, FiEdit2, FiTrash2 } from "react-icons/fi";
 import { useTranscript, deleteTranscript, patchTranscript } from "@/lib/storage/transcripts-store";
 import { deleteRecording } from "@/lib/storage/recordings-store";
+import { useUserId } from "@/lib/storage/user-scope";
 import { formatBytes, formatDuration, formatRelativeTime } from "@/lib/format";
 import { AudioPlayer } from "./audio-player";
 import { TranscriptView } from "./transcript-view";
@@ -16,6 +17,7 @@ import { toast } from "@/lib/use-toast";
 
 export function RecordingDetail({ id }: { id: string }) {
   const router = useRouter();
+  const userId = useUserId();
   const transcript = useTranscript(id);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -38,14 +40,14 @@ export function RecordingDetail({ id }: { id: string }) {
 
   function commitEdit() {
     const next = titleDraft.trim() || transcript!.title;
-    patchTranscript(id, { title: next });
+    patchTranscript(userId, id, { title: next });
     setEditingTitle(false);
   }
 
   async function remove() {
     if (!confirm(`Delete "${transcript!.title}"? This cannot be undone.`)) return;
-    deleteTranscript(id);
-    await deleteRecording(id);
+    deleteTranscript(userId, id);
+    await deleteRecording(userId, id);
     toast.success("Recording deleted");
     router.push("/history");
   }

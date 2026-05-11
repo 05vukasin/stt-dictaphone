@@ -4,6 +4,11 @@ import { ThemeProvider } from "next-themes";
 import { useEffect } from "react";
 import { ToastStack } from "@/components/ui/toast";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
+import { UserScopeProvider } from "@/lib/storage/user-scope";
+import {
+  EffectiveSettingsProvider,
+  type ClientEffectiveSettings,
+} from "@/lib/settings/client-context";
 
 function ServiceWorkerBoot() {
   useEffect(() => {
@@ -21,13 +26,23 @@ function ServiceWorkerBoot() {
   return null;
 }
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export interface ProvidersProps {
+  userId: string | null | undefined;
+  effectiveSettings: ClientEffectiveSettings | null;
+  children: React.ReactNode;
+}
+
+export function Providers({ userId, effectiveSettings, children }: ProvidersProps) {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      {children}
-      <ToastStack />
-      <InstallPrompt />
-      <ServiceWorkerBoot />
+      <UserScopeProvider userId={userId}>
+        <EffectiveSettingsProvider value={effectiveSettings}>
+          {children}
+          <ToastStack />
+          <InstallPrompt />
+          <ServiceWorkerBoot />
+        </EffectiveSettingsProvider>
+      </UserScopeProvider>
     </ThemeProvider>
   );
 }

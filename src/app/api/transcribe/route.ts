@@ -1,18 +1,34 @@
 import { getSttProvider, ProviderError } from "@/lib/providers";
-import { SttProviderSchema } from "@/types/settings";
+import { getServerSession } from "@/lib/auth/session";
+import { getEffectiveSettings } from "@/lib/settings/effective";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const apiKey = req.headers.get("x-api-key") ?? "";
-  if (!apiKey) {
-    return Response.json({ error: "Missing API key" }, { status: 400 });
+  const session = await getServerSession();
+  if (!session?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const providerName = req.headers.get("x-stt-provider") ?? "openai";
-  const parsedProvider = SttProviderSchema.safeParse(providerName);
-  if (!parsedProvider.success) {
-    return Response.json({ error: `Unknown STT provider: ${providerName}` }, { status: 400 });
+
+  let effective;
+  try {
+    effective = await getEffectiveSettings(session.user.id);
+  } catch (err) {
+    return Response.json(
+      { error: err instanceof Error ? err.message : "Settings unavailable" },
+      { status: 500 },
+    );
+  }
+
+  const apiKey = effective.sttProvider === "openai" ? effective.openaiApiKey : effective.groqApiKey;
+  if (!apiKey) {
+    return Response.json(
+      {
+        error: `No API key configured for STT provider "${effective.sttProvider}". Ask your admin to set one in Admin → Groups → ${effective.groupName}.`,
+      },
+      { status: 503 },
+    );
   }
 
   let form: FormData;
@@ -26,11 +42,19 @@ export async function POST(req: Request) {
   if (!(audio instanceof Blob)) {
     return Response.json({ error: "Missing 'audio' field" }, { status: 400 });
   }
-  const language = (form.get("language") as string | null) ?? undefined;
-  const prompt = (form.get("prompt") as string | null) ?? undefined;
+  // Per-request overrides win when present; otherwise the resolved values
+  // (group default or saved override) apply.
+  const language =
+    typeof form.get("language") === "string" && (form.get("language") as string).length > 0
+      ? (form.get("language") as string)
+      : effective.language;
+  const prompt =
+    typeof form.get("prompt") === "string" && (form.get("prompt") as string).length > 0
+      ? (form.get("prompt") as string)
+      : effective.sttPrompt || undefined;
 
   try {
-    const provider = getSttProvider(parsedProvider.data);
+    const provider = getSttProvider(effective.sttProvider);
     const result = await provider.transcribe({ audio, apiKey, language, prompt });
     return Response.json(result);
   } catch (err) {

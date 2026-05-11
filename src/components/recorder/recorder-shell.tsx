@@ -10,14 +10,25 @@ import { RecordingTimer } from "./recording-timer";
 import { LevelMeter } from "./level-meter";
 import { IconButton } from "../ui/icon-button";
 import { SettingsOverlay } from "../settings/settings-overlay";
+import { AuthButton } from "../auth/auth-button";
 import { DictaphoneRecorder, type RecorderState } from "@/lib/recorder";
 import { saveAndTranscribe } from "@/lib/transcription-service";
-import { useSettings } from "@/lib/storage/settings-store";
+import { useDeviceSettings } from "@/lib/storage/settings-store";
+import { useEffectiveSettings } from "@/lib/settings/client-context";
+import { useUserId } from "@/lib/storage/user-scope";
 import { toast } from "@/lib/use-toast";
 
 export function RecorderShell() {
   const router = useRouter();
-  const settings = useSettings();
+  const userId = useUserId();
+  const device = useDeviceSettings();
+  const effective = useEffectiveSettings();
+  // audioFormat + autoSummarize come from the admin-managed group config.
+  // If the user is unauthenticated (shouldn't happen — the proxy redirects)
+  // we fall back to safe defaults so the UI doesn't crash.
+  const audioFormat = effective?.audioFormat ?? "webm";
+  const autoSummarize = effective?.autoSummarize ?? true;
+
   const [state, setState] = useState<RecorderState>("idle");
   const [durationMs, setDurationMs] = useState(0);
   const [peak, setPeak] = useState(0);
@@ -64,10 +75,11 @@ export function RecorderShell() {
         recorderRef.current = null;
         setStream(null);
         if (blob.size > 0) {
-          const id = await saveAndTranscribe({
+          const id = await saveAndTranscribe(userId, {
             blob,
             durationMs,
             mime: rec.getMime() || "audio/webm",
+            autoSummarize,
           });
           toast.success("Recording saved", "Transcribing in the background.");
           router.push(`/recording/${id}`);
@@ -85,7 +97,7 @@ export function RecorderShell() {
       return;
     }
 
-    const newRec = new DictaphoneRecorder(settings.audioFormat, settings.micDeviceId);
+    const newRec = new DictaphoneRecorder(audioFormat, device.micDeviceId);
     newRec.on("state", setState);
     newRec.on("durationMs", setDurationMs);
     newRec.on("level", setPeak);
@@ -120,6 +132,7 @@ export function RecorderShell() {
           <IconButton label="Settings" size="sm" onClick={() => setSettingsOpen(true)}>
             <FiSettings aria-hidden />
           </IconButton>
+          <AuthButton />
         </div>
       </header>
 

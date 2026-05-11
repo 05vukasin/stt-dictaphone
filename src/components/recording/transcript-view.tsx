@@ -3,6 +3,7 @@
 import { FiCopy, FiRefreshCcw } from "react-icons/fi";
 import type { Transcript } from "@/types/recording";
 import { runTranscription } from "@/lib/transcription-service";
+import { useUserId } from "@/lib/storage/user-scope";
 import { toast } from "@/lib/use-toast";
 
 interface TranscriptViewProps {
@@ -10,6 +11,7 @@ interface TranscriptViewProps {
 }
 
 export function TranscriptView({ transcript }: TranscriptViewProps) {
+  const userId = useUserId();
   const isWorking = transcript.status === "transcribing" || transcript.status === "queued";
 
   function copy() {
@@ -35,7 +37,7 @@ export function TranscriptView({ transcript }: TranscriptViewProps) {
           </button>
           <button
             type="button"
-            onClick={() => runTranscription(transcript.id)}
+            onClick={() => runTranscription(userId, transcript.id)}
             disabled={isWorking}
             className={btnCx + " disabled:opacity-40"}
           >

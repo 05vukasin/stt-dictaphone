@@ -2,21 +2,27 @@
 
 import { useSyncExternalStore } from "react";
 import type { Transcript, RecordingId } from "@/types/recording";
+import { useUserId } from "./user-scope";
 
-const STORAGE_KEY = "stt-dict:transcripts:v1";
+const KEY_PREFIX = "stt-dict:transcripts:v1";
 
-let cache: Transcript[] = [];
-let initialized = false;
+function keyFor(userId: string): string {
+  return `${KEY_PREFIX}:${userId}`;
+}
+
+const caches = new Map<string, Transcript[]>();
+const initialized = new Set<string>();
 const listeners = new Set<() => void>();
+let storageListenerAttached = false;
 
 function emit() {
   for (const cb of listeners) cb();
 }
 
-function load(): Transcript[] {
+function load(userId: string): Transcript[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(keyFor(userId));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -26,72 +32,81 @@ function load(): Transcript[] {
   }
 }
 
-function save(list: Transcript[]) {
+function save(userId: string, list: Transcript[]) {
   if (typeof window === "undefined") return;
+  const k = keyFor(userId);
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    window.localStorage.setItem(k, JSON.stringify(list));
   } catch {
-    // localStorage quota exceeded — drop oldest until it fits.
     const trimmed = list.slice(-Math.max(1, Math.floor(list.length * 0.8)));
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+      window.localStorage.setItem(k, JSON.stringify(trimmed));
     } catch {
       // Still too big — give up silently.
     }
   }
 }
 
-function ensureInit() {
-  if (initialized) return;
-  cache = load();
-  initialized = true;
-  if (typeof window !== "undefined") {
-    window.addEventListener("storage", (e) => {
-      if (e.key === STORAGE_KEY) {
-        cache = load();
-        emit();
-      }
-    });
-  }
+function attachStorageListener() {
+  if (storageListenerAttached || typeof window === "undefined") return;
+  storageListenerAttached = true;
+  window.addEventListener("storage", (e) => {
+    if (!e.key || !e.key.startsWith(KEY_PREFIX + ":")) return;
+    const userId = e.key.slice(KEY_PREFIX.length + 1);
+    caches.set(userId, load(userId));
+    emit();
+  });
 }
 
-export function listTranscripts(): Transcript[] {
-  ensureInit();
-  return cache;
+function ensureInit(userId: string) {
+  if (initialized.has(userId)) return;
+  caches.set(userId, load(userId));
+  initialized.add(userId);
+  attachStorageListener();
 }
 
-export function getTranscript(id: RecordingId): Transcript | undefined {
-  return listTranscripts().find((t) => t.id === id);
+export function listTranscripts(userId: string): Transcript[] {
+  ensureInit(userId);
+  return caches.get(userId) ?? [];
 }
 
-export function upsertTranscript(t: Transcript): void {
-  ensureInit();
-  const idx = cache.findIndex((x) => x.id === t.id);
-  if (idx === -1) cache = [t, ...cache];
-  else cache = cache.map((x, i) => (i === idx ? t : x));
-  save(cache);
+export function getTranscript(userId: string, id: RecordingId): Transcript | undefined {
+  return listTranscripts(userId).find((t) => t.id === id);
+}
+
+export function upsertTranscript(userId: string, t: Transcript): void {
+  ensureInit(userId);
+  const list = caches.get(userId) ?? [];
+  const idx = list.findIndex((x) => x.id === t.id);
+  const next = idx === -1 ? [t, ...list] : list.map((x, i) => (i === idx ? t : x));
+  caches.set(userId, next);
+  save(userId, next);
   emit();
 }
 
-export function patchTranscript(id: RecordingId, patch: Partial<Transcript>): void {
-  ensureInit();
-  const idx = cache.findIndex((x) => x.id === id);
+export function patchTranscript(userId: string, id: RecordingId, patch: Partial<Transcript>): void {
+  ensureInit(userId);
+  const list = caches.get(userId) ?? [];
+  const idx = list.findIndex((x) => x.id === id);
   if (idx === -1) return;
-  cache = cache.map((x, i) => (i === idx ? { ...x, ...patch } : x));
-  save(cache);
+  const next = list.map((x, i) => (i === idx ? { ...x, ...patch } : x));
+  caches.set(userId, next);
+  save(userId, next);
   emit();
 }
 
-export function deleteTranscript(id: RecordingId): void {
-  ensureInit();
-  cache = cache.filter((x) => x.id !== id);
-  save(cache);
+export function deleteTranscript(userId: string, id: RecordingId): void {
+  ensureInit(userId);
+  const list = caches.get(userId) ?? [];
+  const next = list.filter((x) => x.id !== id);
+  caches.set(userId, next);
+  save(userId, next);
   emit();
 }
 
-export function clearAllTranscripts(): void {
-  cache = [];
-  save(cache);
+export function clearAllTranscripts(userId: string): void {
+  caches.set(userId, []);
+  save(userId, []);
   emit();
 }
 
@@ -107,7 +122,8 @@ function getServerSnapshot(): Transcript[] {
 }
 
 export function useTranscripts(): Transcript[] {
-  return useSyncExternalStore(subscribe, listTranscripts, getServerSnapshot);
+  const userId = useUserId();
+  return useSyncExternalStore(subscribe, () => listTranscripts(userId), getServerSnapshot);
 }
 
 export function useTranscript(id: RecordingId): Transcript | undefined {
@@ -115,8 +131,23 @@ export function useTranscript(id: RecordingId): Transcript | undefined {
   return list.find((t) => t.id === id);
 }
 
+// Drops the cached snapshot and persisted slot for one user.
+export function clearTranscriptsFor(userId: string) {
+  caches.delete(userId);
+  initialized.delete(userId);
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(keyFor(userId));
+  }
+  emit();
+}
+
 export function __resetTranscriptsForTests() {
-  cache = [];
-  initialized = false;
-  if (typeof window !== "undefined") window.localStorage.removeItem(STORAGE_KEY);
+  caches.clear();
+  initialized.clear();
+  if (typeof window !== "undefined") {
+    for (let i = window.localStorage.length - 1; i >= 0; i--) {
+      const k = window.localStorage.key(i);
+      if (k && k.startsWith(KEY_PREFIX + ":")) window.localStorage.removeItem(k);
+    }
+  }
 }

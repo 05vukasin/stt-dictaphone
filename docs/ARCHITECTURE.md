@@ -2,6 +2,37 @@
 
 A high-level map of the codebase. Read this first if you're picking up the project cold.
 
+## Auth boundary
+
+A Better Auth + Postgres layer sits in front of the recorder. The browser still
+owns recordings, transcripts, and settings; Postgres only holds users, sessions,
+roles, and access requests. Detail in [`.claude/AUTH.md`](../.claude/AUTH.md);
+schema in [`.claude/DATABASE.md`](../.claude/DATABASE.md); the per-user
+namespacing that prevents same-browser data leakage is documented in
+[`.claude/DECISIONS.md`](../.claude/DECISIONS.md) (entry 3).
+
+```
+   ┌─────────────────────────────┐
+   │      Postgres (server)      │
+   │  user, session, account,    │
+   │  verification, jwks,        │
+   │  access_request             │
+   └────────────▲────────────────┘
+                │ Drizzle / Better Auth
+                │
+   ┌────────────┴────────────────┐
+   │   Next.js Route Handlers    │
+   │   /api/auth/*, /api/...     │
+   └────────────▲────────────────┘
+                │ cookie: better-auth.session_token
+                │
+            (browser)
+                │
+       ┌────────┴────────┐
+       │  proxy.ts gate  │
+       └─────────────────┘
+```
+
 ## System diagram
 
 ```

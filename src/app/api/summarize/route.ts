@@ -1,5 +1,6 @@
 import { getSummaryProvider, ProviderError } from "@/lib/providers";
-import { SummaryProviderSchema } from "@/types/settings";
+import { getServerSession } from "@/lib/auth/session";
+import { getEffectiveSettings } from "@/lib/settings/effective";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -11,14 +12,34 @@ interface Body {
 }
 
 export async function POST(req: Request) {
-  const apiKey = req.headers.get("x-api-key") ?? "";
-  if (!apiKey) {
-    return Response.json({ error: "Missing API key" }, { status: 400 });
+  const session = await getServerSession();
+  if (!session?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const providerName = req.headers.get("x-summary-provider") ?? "openai";
-  const parsedProvider = SummaryProviderSchema.safeParse(providerName);
-  if (!parsedProvider.success) {
-    return Response.json({ error: `Unknown summary provider: ${providerName}` }, { status: 400 });
+
+  let effective;
+  try {
+    effective = await getEffectiveSettings(session.user.id);
+  } catch (err) {
+    return Response.json(
+      { error: err instanceof Error ? err.message : "Settings unavailable" },
+      { status: 500 },
+    );
+  }
+
+  const apiKey =
+    effective.summaryProvider === "openai"
+      ? effective.openaiApiKey
+      : effective.summaryProvider === "groq"
+        ? effective.groqApiKey
+        : effective.anthropicApiKey;
+  if (!apiKey) {
+    return Response.json(
+      {
+        error: `No API key configured for summary provider "${effective.summaryProvider}". Ask your admin to set one in Admin → Groups → ${effective.groupName}.`,
+      },
+      { status: 503 },
+    );
   }
 
   let body: Body;
@@ -28,16 +49,19 @@ export async function POST(req: Request) {
     return Response.json({ error: "Expected JSON body" }, { status: 400 });
   }
 
-  if (!body.text || !body.prompt) {
-    return Response.json({ error: "Missing 'text' or 'prompt'" }, { status: 400 });
+  if (!body.text) {
+    return Response.json({ error: "Missing 'text'" }, { status: 400 });
   }
+  // Per-request prompt override wins; otherwise the resolved summaryPrompt
+  // (which is already group-default or user-override per the resolver).
+  const prompt = body.prompt && body.prompt.length > 0 ? body.prompt : effective.summaryPrompt;
 
   try {
-    const provider = getSummaryProvider(parsedProvider.data);
+    const provider = getSummaryProvider(effective.summaryProvider);
     const result = await provider.summarize({
       text: body.text,
       apiKey,
-      prompt: body.prompt,
+      prompt,
       model: body.model,
     });
     return Response.json(result);

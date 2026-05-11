@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getRecording } from "@/lib/storage/recordings-store";
+import { useUserId } from "@/lib/storage/user-scope";
 
 interface AudioPlayerProps {
   id: string;
@@ -9,13 +10,14 @@ interface AudioPlayerProps {
 }
 
 export function AudioPlayer({ id, mime }: AudioPlayerProps) {
+  const userId = useUserId();
   const [src, setSrc] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     let url: string | null = null;
     (async () => {
-      const rec = await getRecording(id);
+      const rec = await getRecording(userId, id);
       if (!rec) return;
       url = URL.createObjectURL(rec.blob);
       setSrc(url);
@@ -23,7 +25,7 @@ export function AudioPlayer({ id, mime }: AudioPlayerProps) {
     return () => {
       if (url) URL.revokeObjectURL(url);
     };
-  }, [id]);
+  }, [id, userId]);
 
   if (!src) {
     return (

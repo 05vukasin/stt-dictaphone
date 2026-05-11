@@ -3,6 +3,7 @@
 import { FiDownload } from "react-icons/fi";
 import type { Transcript } from "@/types/recording";
 import { getRecording } from "@/lib/storage/recordings-store";
+import { useUserId } from "@/lib/storage/user-scope";
 import { toast } from "@/lib/use-toast";
 
 interface ExportMenuProps {
@@ -10,6 +11,7 @@ interface ExportMenuProps {
 }
 
 export function ExportMenu({ transcript }: ExportMenuProps) {
+  const userId = useUserId();
   function exportTxt() {
     download(`${transcript.title}.txt`, transcript.text || "(empty)", "text/plain");
   }
@@ -31,7 +33,7 @@ export function ExportMenu({ transcript }: ExportMenuProps) {
   }
 
   async function exportAudio() {
-    const rec = await getRecording(transcript.id);
+    const rec = await getRecording(userId, transcript.id);
     if (!rec) {
       toast.error("Audio not found");
       return;

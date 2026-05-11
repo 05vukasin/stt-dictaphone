@@ -10,35 +10,21 @@ export const DEFAULT_SUMMARY_PROMPT =
 
 export const DEFAULT_STT_PROMPT = "";
 
-export const SettingsSchema = z.object({
-  version: z.literal(1).default(1),
-
-  // Providers
-  sttProvider: SttProviderSchema.default("openai"),
-  summaryProvider: SummaryProviderSchema.default("openai"),
-
-  // API keys (held only in localStorage on the device)
-  openaiApiKey: z.string().default(""),
-  groqApiKey: z.string().default(""),
-  anthropicApiKey: z.string().default(""),
-
-  // Behavior
-  language: z.string().default("auto"),
-  autoSummarize: z.boolean().default(true),
-  audioFormat: AudioFormatSchema.default("webm"),
+// Device-local user settings. The admin tier (providers, API keys, prompts,
+// language default, autoSummarize, audioFormat) moved to Postgres and is
+// resolved server-side via `getEffectiveSettings`; the only thing that
+// stays on the device is the per-browser microphone choice.
+export const DeviceSettingsSchema = z.object({
+  version: z.literal(2).default(2),
   micDeviceId: z.string().default(""),
-
-  // Prompts
-  sttPrompt: z.string().default(DEFAULT_STT_PROMPT),
-  summaryPrompt: z.string().default(DEFAULT_SUMMARY_PROMPT),
 });
 
-export type Settings = z.infer<typeof SettingsSchema>;
+export type DeviceSettings = z.infer<typeof DeviceSettingsSchema>;
+export const DEFAULT_DEVICE_SETTINGS: DeviceSettings = DeviceSettingsSchema.parse({});
+
 export type SttProvider = z.infer<typeof SttProviderSchema>;
 export type SummaryProvider = z.infer<typeof SummaryProviderSchema>;
 export type AudioFormat = z.infer<typeof AudioFormatSchema>;
-
-export const DEFAULT_SETTINGS: Settings = SettingsSchema.parse({});
 
 export const LANGUAGES: Array<{ code: string; label: string }> = [
   { code: "auto", label: "Auto-detect" },
